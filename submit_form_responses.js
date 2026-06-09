@@ -15,9 +15,9 @@ const MIN_RATE = 40;
 const MAX_RATE = 60;
 
 const DISTRIBUTION = {
-  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.5),
-  MODERATE_RISK: Math.round(TOTAL_RESPONSES * 0.4),
-  AT_RISK: Math.round(TOTAL_RESPONSES * 0.1),
+  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.7),
+  MODERATE_RISK: Math.round(TOTAL_RESPONSES * 0.3),
+  AT_RISK: Math.round(TOTAL_RESPONSES * 0),
 };
 
 
