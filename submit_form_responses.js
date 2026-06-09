@@ -6,25 +6,21 @@ const querystring = require("querystring");
 // CONSTANTS — edit these freely
 // ============================================================
 const FORM_ID = "1FAIpQLSdGU63cK8o0RDUxKSqKWJyhBb4T6eQC1IUhw2cjPScXMuUguQ";
-const TOTAL_RESPONSES = 1000;
+const TOTAL_RESPONSES = 15000;
 
-const DELAY_MIN_MS = 2000;
+const DELAY_MIN_MS = 3000;
 const DELAY_MAX_MS = 600000;
 
-const MIN_RATE = 30;
-const MAX_RATE = 50;
+const MIN_RATE = 40;
+const MAX_RATE = 60;
 
 const DISTRIBUTION = {
-  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.3),
+  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.5),
   MODERATE_RISK: Math.round(TOTAL_RESPONSES * 0.4),
-  AT_RISK: Math.round(TOTAL_RESPONSES * 0.3),
+  AT_RISK: Math.round(TOTAL_RESPONSES * 0.1),
 };
 
-// ============================================================
-// KEEP-ALIVE SERVER (prevents Render from marking as inactive)
-// Render requires a port to be bound on Web Services.
-// For Background Workers this isn't needed but doesn't hurt.
-// ============================================================
+
 const PORT = process.env.PORT || 3000;
 http
   .createServer((req, res) => {
@@ -36,8 +32,18 @@ http
     const selfUrl =
       process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
     setInterval(() => {
-      http.get(selfUrl, (r) => r.resume()).on("error", () => {});
-      console.log(`[PING] self-pinged ${selfUrl}`);
+      const client = selfUrl.startsWith("https") ? https : http;
+
+      client
+        .get(selfUrl, (r) => {
+          console.log(`[PING OK] ${r.statusCode}`);
+          r.resume();
+        })
+        .on("error", (err) => {
+          console.error(`[PING ERROR] ${err.message}`);
+        });
+
+      console.log(`[PING] ${selfUrl}`);
     }, 3 * 60 * 1000);
   });
 
@@ -83,12 +89,8 @@ const DEPARTMENTS = [
   "Electrical Engineering",
   "Mechanical Engineering",
   "Civil Engineering",
-  "Chemical Engineering",
-  "Petroleum Engineering",
   "Biochemistry",
   "Microbiology",
-  "Pharmacology",
-  "Medicine and Surgery",
   "Veterinary Medicine",
   "Animal Science",
   "Agricultural Science",
@@ -101,18 +103,31 @@ const DEPARTMENTS = [
   "Economics",
   "Accounting",
   "Business Administration",
-  "Finance",
-  "Marketing",
-  "Architecture",
   "ift",
   "ets",
-  "csc",
-  "fst",
+  "Biology",
+  "Chemistry",
+  "Physics",
+  "Fst",
   "Library and Information Science",
   "chm",
   "AERD",
   "biochemistry",
+  "BCH",
+  "MCB",
+  "Zoology",
+  "MICROBIOLOGY",
   "microbiology",
+  "emt",
+  "WMA",
+  "AERD",
+  "Pab",
+  "swe",
+  "mts",
+  "AQFM",
+  "Forestry and wild life",
+  "prm",
+  "APH",
 ];
 
 const LIKERT = [
