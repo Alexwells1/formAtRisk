@@ -1,0 +1,12 @@
+{
+  "name": "form-at-risk",
+  "version": "1.0.0",
+  "description": "Synthetic Google Form response submitter",
+  "main": "submit_form_responses.js",
+  "scripts": {
+    "start": "node submit_form_responses.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
