@@ -6,10 +6,10 @@ const querystring = require("querystring");
 // CONSTANTS — edit these freely
 // ============================================================
 const FORM_ID = "1FAIpQLSdGU63cK8o0RDUxKSqKWJyhBb4T6eQC1IUhw2cjPScXMuUguQ";
-const TOTAL_RESPONSES = 15000;
+const TOTAL_RESPONSES = process.env.TOTAL_RESPONSES || 1000;
 
 const DELAY_MIN_MS = 3000;
-const DELAY_MAX_MS = 600000;
+const DELAY_MAX_MS = 500000;
 
 const MIN_RATE = 40;
 const MAX_RATE = 60;
