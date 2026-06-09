@@ -8,8 +8,8 @@ const querystring = require("querystring");
 const FORM_ID = "1FAIpQLSdGU63cK8o0RDUxKSqKWJyhBb4T6eQC1IUhw2cjPScXMuUguQ";
 const TOTAL_RESPONSES = 1000;
 
-const DELAY_MIN_MS = 2000; // 2 seconds
-const DELAY_MAX_MS = 600000; // 10 minutes
+const DELAY_MIN_MS = 2000;
+const DELAY_MAX_MS = 600000;
 
 const MIN_RATE = 30;
 const MAX_RATE = 50;
@@ -33,6 +33,12 @@ http
   })
   .listen(PORT, () => {
     console.log(`[KEEPALIVE] HTTP server listening on port ${PORT}`);
+    const selfUrl =
+      process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    setInterval(() => {
+      http.get(selfUrl, (r) => r.resume()).on("error", () => {});
+      console.log(`[PING] self-pinged ${selfUrl}`);
+    }, 3 * 60 * 1000);
   });
 
 // ============================================================
