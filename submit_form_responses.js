@@ -6,10 +6,10 @@ const querystring = require("querystring");
 // CONSTANTS — edit these freely
 // ============================================================
 const FORM_ID = "1FAIpQLSdGU63cK8o0RDUxKSqKWJyhBb4T6eQC1IUhw2cjPScXMuUguQ";
-const TOTAL_RESPONSES = process.env.TOTAL_RESPONSES || 70;
+const TOTAL_RESPONSES = process.env.TOTAL_RESPONSES || 7000;
 
-const DELAY_MIN_MS = 300;
-const DELAY_MAX_MS = 50000;
+const DELAY_MIN_MS = 300000; // 5 minutes
+const DELAY_MAX_MS = 3600000; // 1 hour
 
 const MIN_RATE = 4000;
 const MAX_RATE = 6000;
@@ -23,8 +23,8 @@ const DISTRIBUTION = {
 
 // Realistic gender ratio for Nigerian universities (slightly more males in STEM)
 const GENDER_RATIO = {
-  MALE: 0.62, // 52% male
-  FEMALE: 0.38, // 48% female
+  MALE: 0.62, // 62% male
+  FEMALE: 0.38, // 38% female
 };
 
 const PORT = process.env.PORT || 3000;
@@ -189,13 +189,16 @@ function randFbzx() {
 function fmtMs(ms) {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
+  if (ms < 3600000) return `${(ms / 60000).toFixed(1)}m`;
+  return `${(ms / 3600000).toFixed(2)}h`;
 }
 
 function fmtElapsed(ms) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `${d}d ${h % 24}h`;
   if (h > 0) return `${h}h ${m % 60}m`;
   if (m > 0) return `${m}m ${s % 60}s`;
   return `${s}s`;
@@ -235,23 +238,10 @@ function selectLevel() {
 // SMART RANDOM DELAY
 // ============================================================
 function getNextDelay(submittedSoFar, elapsedMs) {
-  const hoursElapsed = elapsedMs / 3600000;
-  const currentRate = hoursElapsed > 0 ? submittedSoFar / hoursElapsed : 999;
-
-  let minDelay, maxDelay;
-
-  if (currentRate < MIN_RATE) {
-    minDelay = DELAY_MIN_MS;
-    maxDelay = 30000;
-  } else if (currentRate > MAX_RATE) {
-    minDelay = 120000;
-    maxDelay = DELAY_MAX_MS;
-  } else {
-    minDelay = DELAY_MIN_MS;
-    maxDelay = DELAY_MAX_MS;
-  }
-
-  return Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+  // Simple random delay between 5 minutes and 1 hour
+  return (
+    Math.floor(Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS + 1)) + DELAY_MIN_MS
+  );
 }
 
 // ============================================================
@@ -282,8 +272,8 @@ function activeSleep(totalMs, submittedSoFar, totalTarget) {
         return resolve();
       }
 
-      const tickInterval =
-        Math.floor(Math.random() * (60000 - 3000 + 1)) + 3000;
+      // Heartbeat every 60 seconds (1 minute)
+      const tickInterval = 60000;
       const waitFor = Math.min(tickInterval, remaining);
 
       setTimeout(() => {
@@ -292,7 +282,11 @@ function activeSleep(totalMs, submittedSoFar, totalTarget) {
         const msg = pick(HEARTBEAT_MESSAGES);
         const pct = ((submittedSoFar / totalTarget) * 100).toFixed(1);
         console.log(
-          `  [WAIT] ${msg} | next in ~${remainingSec}s | progress: ${submittedSoFar}/${totalTarget} (${pct}%)`
+          `  [WAIT] ${msg} | next in ~${remainingSec}s (${(
+            remainingSec / 60
+          ).toFixed(
+            1
+          )}m) | progress: ${submittedSoFar}/${totalTarget} (${pct}%)`
         );
         tick();
       }, waitFor);
@@ -642,9 +636,10 @@ async function main() {
       GENDER_RATIO.FEMALE * 100
     ).toFixed(0)}% Female`
   );
-  console.log(`  Rate   : ${MIN_RATE}–${MAX_RATE} responses/hour`);
   console.log(
-    `  Delay  : ${fmtMs(DELAY_MIN_MS)} – ${fmtMs(DELAY_MAX_MS)} randomly`
+    `  Delay  : ${fmtMs(DELAY_MIN_MS)} – ${fmtMs(
+      DELAY_MAX_MS
+    )} randomly between submissions`
   );
   console.log(
     `  Split  : Not At Risk=${DISTRIBUTION.NOT_AT_RISK}, Moderate=${DISTRIBUTION.MODERATE_RISK}, At Risk=${DISTRIBUTION.AT_RISK}`
@@ -695,9 +690,7 @@ async function main() {
             pool.length
           }] ${icon} ${cls.padEnd(14)} ${gender.padEnd(6)} | ${note.padEnd(
             12
-          )} | ${pct}% | ${fmtElapsed(
-            elapsed
-          )} | rate:${rate}/hr | next: ${fmtMs(nextDelay)}`
+          )} | ${pct}% | ${fmtElapsed(elapsed)} | next: ${fmtMs(nextDelay)}`
         );
         await activeSleep(nextDelay, stats.confirmed, TOTAL_RESPONSES);
       } else {
@@ -706,7 +699,7 @@ async function main() {
             pool.length
           }] ${icon} ${cls.padEnd(14)} ${gender.padEnd(6)} | ${note.padEnd(
             12
-          )} | ${pct}% | ${fmtElapsed(elapsed)} | rate:${rate}/hr`
+          )} | ${pct}% | ${fmtElapsed(elapsed)}`
         );
       }
     } catch (err) {
@@ -716,6 +709,7 @@ async function main() {
   }
 
   const mins = ((Date.now() - start) / 60000).toFixed(1);
+  const hours = (mins / 60).toFixed(1);
   console.log("\n" + "=".repeat(68));
   console.log("FINAL SUMMARY");
   console.log("=".repeat(68));
@@ -726,7 +720,9 @@ async function main() {
   console.log(`  At Risk        : ${stats.atRisk}`);
   console.log(`  Male           : ${stats.male}`);
   console.log(`  Female         : ${stats.female}`);
-  console.log(`  Total time     : ${mins} minutes`);
+  console.log(
+    `  Total time     : ${fmtElapsed(Date.now() - start)} (${hours} hours)`
+  );
   console.log("=".repeat(68));
 }
 
