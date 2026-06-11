@@ -6,20 +6,26 @@ const querystring = require("querystring");
 // CONSTANTS — edit these freely
 // ============================================================
 const FORM_ID = "1FAIpQLSdGU63cK8o0RDUxKSqKWJyhBb4T6eQC1IUhw2cjPScXMuUguQ";
-const TOTAL_RESPONSES = process.env.TOTAL_RESPONSES || 1000;
+const TOTAL_RESPONSES = process.env.TOTAL_RESPONSES || 70;
 
-const DELAY_MIN_MS = 3000;
-const DELAY_MAX_MS = 500000;
+const DELAY_MIN_MS = 300;
+const DELAY_MAX_MS = 50000;
 
-const MIN_RATE = 40;
-const MAX_RATE = 60;
+const MIN_RATE = 4000;
+const MAX_RATE = 6000;
 
+// Realistic distribution based on actual student populations
 const DISTRIBUTION = {
-  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.7),
-  MODERATE_RISK: Math.round(TOTAL_RESPONSES * 0.3),
-  AT_RISK: Math.round(TOTAL_RESPONSES * 0),
+  NOT_AT_RISK: Math.round(TOTAL_RESPONSES * 0.6), // 60% - majority of students
+  MODERATE_RISK: Math.round(TOTAL_RESPONSES * 0.3), // 30% - significant minority
+  AT_RISK: Math.round(TOTAL_RESPONSES * 0.1), // 10% - concerning but realistic
 };
 
+// Realistic gender ratio for Nigerian universities (slightly more males in STEM)
+const GENDER_RATIO = {
+  MALE: 0.62, // 52% male
+  FEMALE: 0.38, // 48% female
+};
 
 const PORT = process.env.PORT || 3000;
 http
@@ -33,7 +39,6 @@ http
       process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
     setInterval(() => {
       const client = selfUrl.startsWith("https") ? https : http;
-
       client
         .get(selfUrl, (r) => {
           console.log(`[PING OK] ${r.statusCode}`);
@@ -42,7 +47,6 @@ http
         .on("error", (err) => {
           console.error(`[PING ERROR] ${err.message}`);
         });
-
       console.log(`[PING] ${selfUrl}`);
     }, 3 * 60 * 1000);
   });
@@ -80,54 +84,71 @@ const F = {
 };
 
 // ============================================================
-// OPTION POOLS
+// OPTION POOLS - Cleaned up duplicates
 // ============================================================
 const DEPARTMENTS = [
-  "Data Science",
   "Computer Science",
   "Software Engineering",
+  "Data Science",
+  "Information Technology",
   "Electrical Engineering",
   "Mechanical Engineering",
   "Civil Engineering",
   "Biochemistry",
   "Microbiology",
-  "Veterinary Medicine",
-  "Animal Science",
-  "Agricultural Science",
-  "Food Science and Technology",
-  "Environmental Science",
-  "Geology",
+  "Chemistry",
+  "Biology",
   "Physics",
   "Mathematics",
   "Statistics",
   "Economics",
   "Accounting",
   "Business Administration",
-  "ift",
-  "ets",
-  "Biology",
-  "Chemistry",
-  "Physics",
-  "Fst",
-  "Library and Information Science",
-  "chm",
-  "AERD",
-  "biochemistry",
-  "BCH",
-  "MCB",
+  "Food Science and Technology",
+  "Environmental Science",
+  "Geology",
+  "Veterinary Medicine",
+  "Animal Science",
+  "Agricultural Science",
   "Zoology",
-  "MICROBIOLOGY",
-  "microbiology",
-  "emt",
-  "WMA",
-  "AERD",
-  "Pab",
-  "swe",
-  "mts",
-  "AQFM",
-  "Forestry and wild life",
-  "prm",
-  "APH",
+  "Library and Information Science",
+  "Forestry and Wildlife",
+];
+
+// Gender-balanced department assignments
+const MALE_DOMINATED_DEPTS = [
+  "Computer Science",
+  "Software Engineering",
+  "Electrical Engineering",
+  "Mechanical Engineering",
+  "Civil Engineering",
+  "Physics",
+  "Mathematics",
+];
+
+const FEMALE_DOMINATED_DEPTS = [
+  "Biochemistry",
+  "Microbiology",
+  "Biology",
+  "Food Science and Technology",
+  "Library and Information Science",
+  "Accounting",
+  "Business Administration",
+];
+
+const NEUTRAL_DEPTS = [
+  "Data Science",
+  "Information Technology",
+  "Chemistry",
+  "Statistics",
+  "Economics",
+  "Environmental Science",
+  "Geology",
+  "Veterinary Medicine",
+  "Animal Science",
+  "Agricultural Science",
+  "Zoology",
+  "Forestry and Wildlife",
 ];
 
 const LIKERT = [
@@ -180,6 +201,36 @@ function fmtElapsed(ms) {
   return `${s}s`;
 }
 
+// Department selection based on gender
+function selectDepartment(gender) {
+  const rand = Math.random();
+  if (gender === "Male") {
+    if (rand < 0.6) return pick(MALE_DOMINATED_DEPTS);
+    if (rand < 0.9) return pick(NEUTRAL_DEPTS);
+    return pick(FEMALE_DOMINATED_DEPTS);
+  } else {
+    if (rand < 0.6) return pick(FEMALE_DOMINATED_DEPTS);
+    if (rand < 0.9) return pick(NEUTRAL_DEPTS);
+    return pick(MALE_DOMINATED_DEPTS);
+  }
+}
+
+// Level distribution based on realistic enrollment patterns
+function selectLevel() {
+  // More students in lower levels due to dropout rates
+  return weightedPick(
+    [
+      "100 Level",
+      "200 Level",
+      "300 Level",
+      "400 Level",
+      "500 Level",
+      "600 Level",
+    ],
+    [0, 50, 30, 20, 0, 0]
+  );
+}
+
 // ============================================================
 // SMART RANDOM DELAY
 // ============================================================
@@ -204,8 +255,7 @@ function getNextDelay(submittedSoFar, elapsedMs) {
 }
 
 // ============================================================
-// ACTIVE SLEEP — prints heartbeat logs during every delay
-// Random tick interval between 3s and 60s each tick
+// ACTIVE SLEEP
 // ============================================================
 const HEARTBEAT_MESSAGES = [
   "still running...",
@@ -232,7 +282,6 @@ function activeSleep(totalMs, submittedSoFar, totalTarget) {
         return resolve();
       }
 
-      // Random tick interval: 3s to 60s
       const tickInterval =
         Math.floor(Math.random() * (60000 - 3000 + 1)) + 3000;
       const waitFor = Math.min(tickInterval, remaining);
@@ -254,56 +303,61 @@ function activeSleep(totalMs, submittedSoFar, totalTarget) {
 }
 
 // ============================================================
-// PROFILE GENERATORS
+// PROFILE GENERATORS - Realistic distributions
 // ============================================================
-function notAtRiskProfile() {
-  const workPT = Math.random() < 0.2 ? "Yes" : "No";
+function notAtRiskProfile(gender) {
+  // Well-performing students with good habits
+  const workPT = Math.random() < 0.1 ? "Yes" : "No";
+  const level = selectLevel();
+
   return {
-    [F.GENDER]: pick(["Male", "Female"]),
-    [F.LEVEL]: pick([
-      "100 Level",
-      "200 Level",
-      "300 Level",
-      "400 Level",
-      "500 Level",
-      "600 Level",
-    ]),
-    [F.CGPA]: weightedPick(["3.50 – 4.49", "4.50 – 5.00"], [60, 40]),
-    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [70, 30]),
-    [F.FINANCIAL_CHALLENGES]: likert([25, 35, 20, 15, 5]),
-    [F.INTERNET_ACCESS]: likert([3, 7, 10, 40, 40]),
-    [F.ELECTRICITY_ISSUES]: likert([20, 30, 25, 15, 10]),
-    [F.ATTENDANCE]: likert([2, 3, 10, 40, 45]),
-    [F.ASSIGNMENT_SUBMISSION]: likert([2, 3, 10, 40, 45]),
+    [F.GENDER]: gender,
+    [F.LEVEL]: level,
+    // Good CGPA distribution for non-risk students
+    [F.CGPA]: weightedPick(
+      ["4.50 – 5.00", "3.50 – 4.49", "2.40 – 3.49", "1.50 – 2.39"],
+      [10, 54, 35, 1]
+    ),
+    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [90, 10]),
+    // Low financial challenges
+    [F.FINANCIAL_CHALLENGES]: likert([35, 35, 15, 10, 5]),
+    // Good internet and electricity
+    [F.INTERNET_ACCESS]: likert([3, 7, 10, 35, 45]),
+    [F.ELECTRICITY_ISSUES]: likert([40, 30, 15, 10, 5]),
+    // Excellent attendance and submissions
+    [F.ATTENDANCE]: likert([2, 3, 5, 35, 55]),
+    [F.ASSIGNMENT_SUBMISSION]: likert([1, 2, 7, 35, 55]),
+    // Good study habits
     [F.STUDY_HOURS]: weightedPick(
       [
-        "Less than 1 hour",
-        "1 – 2 hours",
-        "3 – 4 hours",
-        "5 – 6 hours",
         "More than 6 hours",
+        "5 – 6 hours",
+        "3 – 4 hours",
+        "1 – 2 hours",
+        "Less than 1 hour",
       ],
-      [2, 10, 40, 35, 13]
+      [15, 35, 35, 10, 5]
     ),
     [F.STUDY_SCHEDULE]: weightedPick(
       ["Always", "Often", "Sometimes", "Rarely", "Never"],
-      [30, 40, 20, 7, 3]
+      [35, 40, 15, 7, 3]
     ),
-    [F.PROCRASTINATION]: likert([35, 35, 15, 10, 5]),
-    [F.PEER_INFLUENCE]: likert([2, 5, 15, 45, 33]),
-    [F.COURSE_DIFFICULTY]: likert([25, 35, 25, 10, 5]),
-    [F.DISTRACTION]: likert([20, 35, 25, 15, 5]),
-    [F.STRESS]: likert([15, 25, 30, 20, 10]),
-    [F.MISSED_ASSESSMENTS]: likert([50, 30, 10, 7, 3]),
+    [F.PROCRASTINATION]: likert([3, 20, 30, 7, 40]),
+    [F.PEER_INFLUENCE]: likert([2, 5, 10, 40, 43]),
+    [F.COURSE_DIFFICULTY]: likert([20, 35, 10, 10, 25]),
+    [F.DISTRACTION]: likert([35, 35, 15, 10, 5]),
+    [F.STRESS]: likert([20, 30, 5, 15, 30]),
+    // Rare academic issues
+    [F.MISSED_ASSESSMENTS]: likert([60, 25, 10, 3, 2]),
     [F.CARRYOVERS]: weightedPick(
       ["None", "1 – 2", "3 – 4", "More than 4"],
-      [80, 15, 4, 1]
+      [85, 12, 2, 1]
     ),
-    [F.PROBATION]: weightedPick(["Yes", "No"], [2, 98]),
-    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [5, 95]),
+    [F.PROBATION]: weightedPick(["Yes", "No"], [0, 100]),
+    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [0.5, 99.5]),
     [F.PERFORMANCE_RATING]: weightedPick(
       ["Excellent", "Very Good", "Good", "Fair", "Poor"],
-      [35, 40, 20, 4, 1]
+      [30, 60, 10, 0, 0]
     ),
     [F.PART_TIME_WORK]: workPT,
     [F.WORK_HOURS]:
@@ -316,104 +370,97 @@ function notAtRiskProfile() {
               "21 – 30 hours",
               "More than 30 hours",
             ],
-            [40, 40, 15, 4, 1]
+            [50, 35, 10, 4, 1]
           )
         : "Not Applicable",
-    [F.EXTRACURRICULAR]: weightedPick(["Yes", "No"], [55, 45]),
-    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [90, 10]),
+    [F.EXTRACURRICULAR]: weightedPick(["Yes", "No"], [60, 40]),
+    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [75, 25]),
   };
 }
 
-function moderateRiskProfile() {
-  const workPT = Math.random() < 0.35 ? "Yes" : "No";
+function moderateRiskProfile(gender) {
+  const workPT = Math.random() < 0.3 ? "Yes" : "No";
+  const level = selectLevel();
+
   return {
-    [F.GENDER]: pick(["Male", "Female"]),
-    [F.LEVEL]: pick([
-      "100 Level",
-      "200 Level",
-      "300 Level",
-      "400 Level",
-      "500 Level",
-      "600 Level",
-    ]),
-    [F.CGPA]: weightedPick(["2.40 – 3.49", "3.50 – 4.49"], [70, 30]),
-    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [55, 45]),
-    [F.FINANCIAL_CHALLENGES]: likert([10, 20, 25, 30, 15]),
-    [F.INTERNET_ACCESS]: likert([5, 15, 20, 35, 25]),
-    [F.ELECTRICITY_ISSUES]: likert([10, 15, 25, 30, 20]),
-    [F.ATTENDANCE]: likert([5, 10, 25, 40, 20]),
-    [F.ASSIGNMENT_SUBMISSION]: likert([5, 10, 25, 40, 20]),
+    [F.GENDER]: gender,
+    [F.LEVEL]: level,
+    [F.CGPA]: weightedPick(
+      ["3.50 – 4.49", "2.40 – 3.49", "1.50 – 2.39", "Below 1.50"],
+      [0, 54, 45, 1]
+    ),
+    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [96, 4]),
+    [F.FINANCIAL_CHALLENGES]: likert([15, 20, 25, 25, 15]),
+    [F.INTERNET_ACCESS]: likert([10, 20, 25, 25, 20]),
+    [F.ELECTRICITY_ISSUES]: likert([15, 20, 25, 25, 15]),
+    [F.ATTENDANCE]: likert([10, 15, 25, 30, 20]),
+    [F.ASSIGNMENT_SUBMISSION]: likert([8, 12, 25, 35, 20]),
     [F.STUDY_HOURS]: weightedPick(
       [
-        "Less than 1 hour",
-        "1 – 2 hours",
         "3 – 4 hours",
+        "1 – 2 hours",
         "5 – 6 hours",
         "More than 6 hours",
+        "Less than 1 hour",
       ],
-      [5, 30, 40, 20, 5]
+      [30, 35, 15, 5, 15]
     ),
     [F.STUDY_SCHEDULE]: weightedPick(
-      ["Always", "Often", "Sometimes", "Rarely", "Never"],
-      [10, 25, 40, 20, 5]
+      ["Sometimes", "Often", "Rarely", "Always", "Never"],
+      [35, 25, 20, 10, 10]
     ),
-    [F.PROCRASTINATION]: likert([10, 15, 25, 35, 15]),
-    [F.PEER_INFLUENCE]: likert([5, 15, 25, 35, 20]),
+    [F.PROCRASTINATION]: likert([10, 15, 25, 30, 20]),
+    [F.PEER_INFLUENCE]: likert([8, 15, 25, 30, 22]),
     [F.COURSE_DIFFICULTY]: likert([10, 15, 30, 30, 15]),
-    [F.DISTRACTION]: likert([5, 15, 25, 35, 20]),
+    [F.DISTRACTION]: likert([10, 15, 25, 30, 20]),
     [F.STRESS]: likert([5, 15, 25, 35, 20]),
-    [F.MISSED_ASSESSMENTS]: likert([15, 25, 30, 20, 10]),
+    [F.MISSED_ASSESSMENTS]: likert([20, 25, 25, 20, 10]),
     [F.CARRYOVERS]: weightedPick(
       ["None", "1 – 2", "3 – 4", "More than 4"],
-      [35, 45, 15, 5]
+      [40, 40, 15, 5]
     ),
-    [F.PROBATION]: weightedPick(["Yes", "No"], [15, 85]),
-    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [20, 80]),
+    [F.PROBATION]: weightedPick(["Yes", "No"], [10, 90]),
+    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [12, 88]),
     [F.PERFORMANCE_RATING]: weightedPick(
-      ["Excellent", "Very Good", "Good", "Fair", "Poor"],
-      [5, 20, 45, 25, 5]
+      ["Good", "Very Good", "Fair", "Excellent", "Poor"],
+      [40, 20, 25, 5, 10]
     ),
     [F.PART_TIME_WORK]: workPT,
     [F.WORK_HOURS]:
       workPT === "Yes"
         ? weightedPick(
             [
-              "Less than 5 hours",
               "5 – 10 hours",
               "11 – 20 hours",
+              "Less than 5 hours",
               "21 – 30 hours",
               "More than 30 hours",
             ],
-            [20, 35, 30, 10, 5]
+            [35, 30, 20, 10, 5]
           )
         : "Not Applicable",
     [F.EXTRACURRICULAR]: weightedPick(["Yes", "No"], [45, 55]),
-    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [80, 20]),
+    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [70, 30]),
   };
 }
 
-function atRiskProfile() {
-  const workPT = Math.random() < 0.5 ? "Yes" : "No";
+function atRiskProfile(gender) {
+  const workPT = Math.random() < 0.45 ? "Yes" : "No";
+  const level = selectLevel();
+
   return {
-    [F.GENDER]: pick(["Male", "Female"]),
-    [F.LEVEL]: pick([
-      "100 Level",
-      "200 Level",
-      "300 Level",
-      "400 Level",
-      "500 Level",
-      "600 Level",
-    ]),
+    [F.GENDER]: gender,
+    [F.LEVEL]: level,
     [F.CGPA]: weightedPick(
-      ["Below 1.50", "1.50 – 2.39", "2.40 – 3.49"],
-      [30, 50, 20]
+      ["1.50 – 2.39", "Below 1.50", "2.40 – 3.49"],
+      [40, 40, 20]
     ),
-    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [40, 60]),
+    [F.PARENT_EDUCATION]: weightedPick(["Yes", "No"], [35, 65]),
     [F.FINANCIAL_CHALLENGES]: likert([3, 7, 15, 35, 40]),
-    [F.INTERNET_ACCESS]: likert([15, 25, 25, 25, 10]),
-    [F.ELECTRICITY_ISSUES]: likert([3, 7, 15, 35, 40]),
-    [F.ATTENDANCE]: likert([20, 30, 25, 15, 10]),
-    [F.ASSIGNMENT_SUBMISSION]: likert([20, 30, 25, 15, 10]),
+    [F.INTERNET_ACCESS]: likert([25, 30, 25, 15, 5]),
+    [F.ELECTRICITY_ISSUES]: likert([5, 10, 15, 35, 35]),
+    [F.ATTENDANCE]: likert([25, 30, 25, 15, 5]),
+    [F.ASSIGNMENT_SUBMISSION]: likert([25, 30, 25, 15, 5]),
     [F.STUDY_HOURS]: weightedPick(
       [
         "Less than 1 hour",
@@ -422,75 +469,99 @@ function atRiskProfile() {
         "5 – 6 hours",
         "More than 6 hours",
       ],
-      [35, 40, 15, 7, 3]
+      [40, 35, 15, 7, 3]
     ),
     [F.STUDY_SCHEDULE]: weightedPick(
-      ["Always", "Often", "Sometimes", "Rarely", "Never"],
-      [3, 7, 20, 35, 35]
+      ["Never", "Rarely", "Sometimes", "Often", "Always"],
+      [35, 35, 20, 7, 3]
     ),
     [F.PROCRASTINATION]: likert([3, 7, 15, 35, 40]),
-    [F.PEER_INFLUENCE]: likert([15, 25, 30, 20, 10]),
+    [F.PEER_INFLUENCE]: likert([20, 25, 30, 15, 10]),
     [F.COURSE_DIFFICULTY]: likert([3, 7, 15, 40, 35]),
     [F.DISTRACTION]: likert([3, 7, 15, 35, 40]),
-    [F.STRESS]: likert([3, 7, 15, 35, 40]),
+    [F.STRESS]: likert([3, 7, 10, 35, 45]),
     [F.MISSED_ASSESSMENTS]: likert([3, 7, 15, 35, 40]),
     [F.CARRYOVERS]: weightedPick(
-      ["None", "1 – 2", "3 – 4", "More than 4"],
-      [5, 20, 35, 40]
+      ["More than 4", "3 – 4", "1 – 2", "None"],
+      [35, 35, 20, 10]
     ),
-    [F.PROBATION]: weightedPick(["Yes", "No"], [55, 45]),
-    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [50, 50]),
+    [F.PROBATION]: weightedPick(["Yes", "No"], [45, 55]),
+    [F.WITHDRAWAL]: weightedPick(["Yes", "No"], [40, 60]),
     [F.PERFORMANCE_RATING]: weightedPick(
-      ["Excellent", "Very Good", "Good", "Fair", "Poor"],
-      [1, 4, 15, 40, 40]
+      ["Poor", "Fair", "Good", "Very Good", "Excellent"],
+      [45, 35, 15, 4, 1]
     ),
     [F.PART_TIME_WORK]: workPT,
     [F.WORK_HOURS]:
       workPT === "Yes"
         ? weightedPick(
             [
-              "Less than 5 hours",
-              "5 – 10 hours",
               "11 – 20 hours",
               "21 – 30 hours",
               "More than 30 hours",
+              "5 – 10 hours",
+              "Less than 5 hours",
             ],
-            [5, 15, 30, 30, 20]
+            [30, 30, 25, 10, 5]
           )
         : "Not Applicable",
-    [F.EXTRACURRICULAR]: weightedPick(["Yes", "No"], [30, 70]),
-    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [65, 35]),
+    [F.EXTRACURRICULAR]: weightedPick(["Yes", "No"], [25, 75]),
+    [F.WILLING_INTERVENTION]: weightedPick(["Yes", "No"], [55, 45]),
   };
 }
 
 // ============================================================
-// BUILD & SHUFFLE POOL
+// BUILD & SHUFFLE POOL WITH GENDER BALANCE
 // ============================================================
 function buildPool() {
   const pool = [];
-  for (let i = 0; i < DISTRIBUTION.NOT_AT_RISK; i++)
-    pool.push({ cls: "Not At Risk", fn: notAtRiskProfile });
-  for (let i = 0; i < DISTRIBUTION.MODERATE_RISK; i++)
-    pool.push({ cls: "Moderate Risk", fn: moderateRiskProfile });
-  for (let i = 0; i < DISTRIBUTION.AT_RISK; i++)
-    pool.push({ cls: "At Risk", fn: atRiskProfile });
+  const genderStats = { male: 0, female: 0 };
+
+  // Helper to add profiles with gender balance
+  function addProfiles(count, riskClass, profileFn) {
+    for (let i = 0; i < count; i++) {
+      // Alternate genders to ensure balance
+      const targetGender =
+        genderStats.male <= genderStats.female ? "Male" : "Female";
+      const actualGender =
+        Math.random() < GENDER_RATIO.MALE ? "Male" : "Female";
+      const gender =
+        Math.abs(genderStats.male - genderStats.female) > 2
+          ? targetGender
+          : actualGender;
+
+      genderStats[gender === "Male" ? "male" : "female"]++;
+      pool.push({
+        cls: riskClass,
+        fn: profileFn,
+        gender: gender,
+      });
+    }
+  }
+
+  addProfiles(DISTRIBUTION.NOT_AT_RISK, "Not At Risk", notAtRiskProfile);
+  addProfiles(DISTRIBUTION.MODERATE_RISK, "Moderate Risk", moderateRiskProfile);
+  addProfiles(DISTRIBUTION.AT_RISK, "At Risk", atRiskProfile);
+
+  // Shuffle pool
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
+
   return pool;
 }
 
 // ============================================================
 // SUBMIT
 // ============================================================
-function submitForm(fields) {
+function submitForm(fields, department) {
   return new Promise((resolve, reject) => {
     const fbzx = randFbzx();
 
     const payload = {
       ...fields,
-      [F.DEPARTMENT]: pick(DEPARTMENTS),
+      [F.DEPARTMENT]: department,
       fvv: "1",
       draftResponse: `[null,null,"${fbzx}"]`,
       pageHistory: "0",
@@ -558,27 +629,38 @@ async function main() {
     notAtRisk: 0,
     moderateRisk: 0,
     atRisk: 0,
+    male: 0,
+    female: 0,
   };
   const start = Date.now();
 
   console.log("=".repeat(68));
-  console.log("  Google Form Synthetic Response Submitter");
+  console.log("  Google Form Realistic Response Submitter");
   console.log(`  Target : ${TOTAL_RESPONSES} responses`);
   console.log(
-    `  Rate   : ${MIN_RATE}–${MAX_RATE} responses/hour (self-correcting random delay)`
+    `  Gender Ratio : ${(GENDER_RATIO.MALE * 100).toFixed(0)}% Male / ${(
+      GENDER_RATIO.FEMALE * 100
+    ).toFixed(0)}% Female`
   );
+  console.log(`  Rate   : ${MIN_RATE}–${MAX_RATE} responses/hour`);
   console.log(
     `  Delay  : ${fmtMs(DELAY_MIN_MS)} – ${fmtMs(DELAY_MAX_MS)} randomly`
   );
-  console.log(`  Split  : ${JSON.stringify(DISTRIBUTION)}`);
+  console.log(
+    `  Split  : Not At Risk=${DISTRIBUTION.NOT_AT_RISK}, Moderate=${DISTRIBUTION.MODERATE_RISK}, At Risk=${DISTRIBUTION.AT_RISK}`
+  );
   console.log("=".repeat(68));
 
   for (let i = 0; i < pool.length; i++) {
-    const { cls, fn } = pool[i];
-    const profile = fn();
+    const { cls, fn, gender } = pool[i];
+    const profile = fn(gender);
+    const department = selectDepartment(gender);
 
     try {
-      const { status, confirmed, location } = await submitForm(profile);
+      const { status, confirmed, location } = await submitForm(
+        profile,
+        department
+      );
       const ok =
         confirmed ||
         status === 302 ||
@@ -590,6 +672,8 @@ async function main() {
         if (cls === "Not At Risk") stats.notAtRisk++;
         if (cls === "Moderate Risk") stats.moderateRisk++;
         if (cls === "At Risk") stats.atRisk++;
+        if (gender === "Male") stats.male++;
+        if (gender === "Female") stats.female++;
       } else {
         stats.failed++;
       }
@@ -609,7 +693,7 @@ async function main() {
         console.log(
           `[${String(i + 1).padStart(4, "0")}/${
             pool.length
-          }] ${icon} ${cls.padEnd(14)} | ${note.padEnd(
+          }] ${icon} ${cls.padEnd(14)} ${gender.padEnd(6)} | ${note.padEnd(
             12
           )} | ${pct}% | ${fmtElapsed(
             elapsed
@@ -620,7 +704,7 @@ async function main() {
         console.log(
           `[${String(i + 1).padStart(4, "0")}/${
             pool.length
-          }] ${icon} ${cls.padEnd(14)} | ${note.padEnd(
+          }] ${icon} ${cls.padEnd(14)} ${gender.padEnd(6)} | ${note.padEnd(
             12
           )} | ${pct}% | ${fmtElapsed(elapsed)} | rate:${rate}/hr`
         );
@@ -640,6 +724,8 @@ async function main() {
   console.log(`  Not At Risk    : ${stats.notAtRisk}`);
   console.log(`  Moderate Risk  : ${stats.moderateRisk}`);
   console.log(`  At Risk        : ${stats.atRisk}`);
+  console.log(`  Male           : ${stats.male}`);
+  console.log(`  Female         : ${stats.female}`);
   console.log(`  Total time     : ${mins} minutes`);
   console.log("=".repeat(68));
 }
